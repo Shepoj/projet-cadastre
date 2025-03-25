@@ -2,15 +2,18 @@ import tkinter as tk
 import numpy as np
 import chainlist
 
-poly = [[5.9889548,43.1210753],[5.9889715,43.1209775],[5.9889815,43.1209784],[5.9889867,43.1209474],[5.9889465,43.1209438],[5.9889485,43.1209321],[5.9889195,43.1209295],[5.9888752,43.1209255],[5.9888653,43.1209033],[5.9888822,43.1208992],[5.9888836,43.1208906],[5.9888709,43.1208706],[5.9888869,43.1208668],[5.9888936,43.1208275],[5.9891953,43.1208555],[5.989178,43.1209569],[5.9891656,43.1209558],[5.9891529,43.1210301],[5.9891476,43.1210296],[5.9891425,43.1210601],[5.9891348,43.1210623],[5.9890993,43.1210591],[5.9890967,43.1210748],[5.9890792,43.1210813],[5.9890376,43.1210775],[5.9890368,43.1210827],[5.9889548,43.1210753]]
+polys = [[(1,3),(2,2),(4,2),(3,4),(1,3)],[(6,1),(7,3),(6,4),(5,1),(6,1)],[(3,6),(6,5),(8,6),(5,7),(3,6)],[(9,4),(10,2),(12,4),(11,5),(10,5),(9,4)]]
 
 
 lat=[]
 long=[]
+allpoints=[]
 
-for point in poly:
-    lat.append(point[1])
-    long.append(point[0])
+for poly in polys:
+    for point in poly:
+        allpoints.append(point)
+        lat.append(point[1])
+        long.append(point[0])
 
 
 
@@ -38,6 +41,8 @@ class Polygone():
         self.couleur=couleur
         self.sommets=None
         self.enveloppe=None
+        self.voisins=[]
+        self.sb=[]
 
     def polygone(self, vp, window):
         convertie=[projection(self.pts[0],window,vp)]
@@ -52,13 +57,13 @@ class Polygone():
         for point in range(1,len(self.enveloppe)):
             convertie.append(projection(self.enveloppe[point], window, vp))
         canevas.create_polygon(tk._flatten(convertie),fill='blue',outline=self.contour)
+        return self.enveloppe
 
     def cling(self):
         self.sommets=chainlist.DoublyLinkedList()
         for point in self.pts:
             n=chainlist.Node(point)
             self.sommets.insert_back(n)
-        print(self.sommets)
 
     def angledet(self,a,b,c):
         ax,ay=a
@@ -90,16 +95,91 @@ class Polygone():
             nd=nd.next
         self.enveloppe=self.sommets.to_list()
 
+    def superbande(self,allpolys, window, vp):
+        self.sb=(min(self.enveloppe, key=lambda x: x[0]),max(self.enveloppe, key=lambda x: x[0]))
+        bande_x=(self.sb[0][0],self.sb[1][0])
+        for point in self.sb:
+            converted=projection(point, vp, window)
+            #canevas.create_line(converted[0],0,converted[0],600)
+        for poly in allpolys:
+            if poly!=self:
+                for point in poly.pts:
+                    if bande_x[0]<=point[0]<=bande_x[1]:
+                        self.voisins.append(poly)
+                        break #peutetre faire avec un while pour eviter break
+        return self.voisins
+    
+    def scanning(self,window,vp):
+        for pt in self.pts:
+            future_collisions_poly=[] #la liste des polygones qui sont au dessus/en dessous de ce point
+            future_collisions_segments=[] #la liste des segments directement au dessus/en dessous de ce point
+            up_and_down={"up":vp[3],"down":vp[1]} #les coordonnées en y de la droite du trapèze
+            for poly in self.voisins:
+                bande_x=(poly.sb[0][0],poly.sb[1][0]) #bande_x c'est les x de superbande du voisin
+                if bande_x[0]<=pt[0]<=bande_x[1]:
+                    future_collisions_poly.append(poly)
+            if future_collisions_poly: #si il y a des polygones au dessus/en dessous
+                for poly in future_collisions_poly:
+                    for segpoint in range(0,len(poly.pts)-1): #on va parcourir tous les segments qui composent le polygone voisin
+                        segment=(poly.pts[segpoint], poly.pts[segpoint+1])
+                        sortedseg=sorted(segment, key=lambda x: x[0]) #sortedseg c'est le segment trié selon x
+                        bande_x_seg=(sortedseg[0][0],sortedseg[1][0])#bande_x_seg c'est les x de la superbande du segment courant
+                        if bande_x_seg[0]<=pt[0]<=bande_x_seg[1]: #si le point est dans la superbande du segment
+                            if segment[0][0]!=segment[1][0]:
+                                pente=(segment[0][1]-segment[1][1])/(segment[0][0]-segment[1][0])#calcul de la pente
+                                delta_x=pt[0]-sortedseg[0][0] #la distance entre le plus petit x du segment et le x du point quon traite
+                                collision_y=sortedseg[0][1]+delta_x*pente #on calcule le y ou aura lieu l'intersection
+                                delta_y=pt[1]-collision_y #la distance entre le y du point et celui de lintersection, pour savoir si le segment est en haut ou en bas
+                                if delta_y>0: #cas ou le segment est en bas
+                                    up_and_down["down"]=max(up_and_down["down"],collision_y) #on dit que la collision en bas c'est le point le plus proche du point actuel
+                                elif delta_y<0: #cas ou le segment est en haut
+                                    up_and_down["up"]=min(up_and_down["up"],collision_y) #de meme
+                                else: #si la collision se fait sur le point meme, on traite en fonction de la hauteur du 1er point, le seul cas ou ca pose probleme cest une ligne horizontale et on va l'ignorer
+                                    if sortedseg[0][1]<pt[y]: #si la pente est positive, le trait est a tracer en haut
+                                        up_and_down["down"]=collision_y 
+                                    elif sortedseg[0][1]>pt[y]: #si la pente est negative
+                                        up_and_down["up"]=collision_y
+                                    else:pass #verifier en fonction du ymin/ymax du polygone A RAJOUTER
+                                """cas tres particuliers en haut,revenir dessus plus tard"""
+                            else: #le cas ou le segment ou aura lieu la collision est vertical
+                                if pt[1]<sortedseg[0][1] and pt[1]<sortedseg[1][1]: #si le point est en dessous du segment
+                                    up_and_down["up"]=min(up_and_down["up"],min(sortedseg[0][1],sortedseg[1][1]))
+                                elif pt[1]>sortedseg[0][1] and pt[1]>sortedseg[1][1]:
+                                    up_and_down["down"]=max(up_and_down["down"],max(sortedseg[0][1],sortedseg[1][1]))
+                                else: #si le point est sur le segment
+                                    up_and_down["down"]=up_and_down['up']=collision_y 
+            point_haut=(pt[0],up_and_down["up"])
+            point_bas=(pt[0],up_and_down["down"])
+            point_haut_projete=projection(point_haut,vp,window)
+            point_bas_projete=projection(point_bas,vp,window)
+            canevas.create_line(point_haut_projete[0],pt[0],point_haut_projete[1],pt[1])
+            canevas.create_line(point_bas_projete[0],pt[0],point_bas_projete[1],pt[1])
+
+                                
+                                
+            
+
 
 
 win= tk.Tk()
-canevas=tk.Canvas(win,width=500*ratio,height=500, bg="white")
+canevas=tk.Canvas(win,width=600*ratio,height=600, bg="white")
 canevas.pack()
 
-pol=Polygone(len(poly),poly)
+myPolygons=[]
 
-pol.affiche_enveloppe([0,0,500*ratio,500],[xmin,ymin, xmax-xmin,ymax-ymin])
-pol.polygone([0,0,500*ratio,500],[xmin,ymin, xmax-xmin,ymax-ymin])
+for poly in polys:
+    pol=Polygone(len(poly),poly)
+
+    allpoints+=pol.affiche_enveloppe([25,25,525*ratio,525],[xmin,ymin, xmax-xmin,ymax-ymin])
+    #pol.polygone([0,0,500*ratio,500],[xmin,ymin, xmax-xmin,ymax-ymin])
+    myPolygons.append(pol)
+
+for pol in myPolygons:
+    pol.superbande(myPolygons,[25,25,525*ratio,525],[xmin,ymin, xmax-xmin,ymax-ymin])
+
+for pol in myPolygons:
+    pol.scanning([25,25,525*ratio,525],[xmin,ymin, xmax-xmin,ymax-ymin])
+
 
 win.mainloop()
 
