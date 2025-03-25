@@ -2,7 +2,7 @@ import tkinter as tk
 import numpy as np
 import chainlist
 
-polys = [[(1,3),(2,2),(4,2),(3,4),(1,3)],[(6,1),(7,3),(6,4),(5,1),(6,1)],[(3,6),(6,5),(8,6),(5,7),(3,6)],[(9,4),(10,2),(12,4),(11,5),(10,5),(9,4)]]
+polys = [[(1,3),(2,2),(4,2),(3.5,4),(1,3)],[(6,1),(7,3),(6,4),(5,1),(6,1)],[(3,6),(6,5),(8,6),(5,7),(3,6)],[(9,4),(10,2),(12,4),(11,5),(10,5),(9,4)]]
 
 
 lat=[]
@@ -113,7 +113,8 @@ class Polygone():
         for pt in self.pts:
             future_collisions_poly=[] #la liste des polygones qui sont au dessus/en dessous de ce point
             future_collisions_segments=[] #la liste des segments directement au dessus/en dessous de ce point
-            up_and_down={"up":vp[3],"down":vp[1]} #les coordonnées en y de la droite du trapèze
+            up_and_down={"up":100000,"down":0} #les coordonnées en y de la droite du trapèze
+            y_min_poly, y_max_poly=min(self.enveloppe, key=lambda x: x[1])[1],max(self.enveloppe, key=lambda x: x[1])[1]
             for poly in self.voisins:
                 bande_x=(poly.sb[0][0],poly.sb[1][0]) #bande_x c'est les x de superbande du voisin
                 if bande_x[0]<=pt[0]<=bande_x[1]:
@@ -139,7 +140,11 @@ class Polygone():
                                         up_and_down["down"]=collision_y 
                                     elif sortedseg[0][1]>pt[y]: #si la pente est negative
                                         up_and_down["up"]=collision_y
-                                    else:pass #verifier en fonction du ymin/ymax du polygone A RAJOUTER
+                                    else:
+                                        if pt[1]==y_max_poly:
+                                            up_and_down["up"]=pt[1]
+                                        else:
+                                            up_and_down["down"]=pt[1]
                                 """cas tres particuliers en haut,revenir dessus plus tard"""
                             else: #le cas ou le segment ou aura lieu la collision est vertical
                                 if pt[1]<sortedseg[0][1] and pt[1]<sortedseg[1][1]: #si le point est en dessous du segment
@@ -147,17 +152,18 @@ class Polygone():
                                 elif pt[1]>sortedseg[0][1] and pt[1]>sortedseg[1][1]:
                                     up_and_down["down"]=max(up_and_down["down"],max(sortedseg[0][1],sortedseg[1][1]))
                                 else: #si le point est sur le segment
-                                    up_and_down["down"]=up_and_down['up']=collision_y 
+                                    up_and_down["up"]=up_and_down["down"]=pt[1]
             point_haut=(pt[0],up_and_down["up"])
             point_bas=(pt[0],up_and_down["down"])
             point_haut_projete=projection(point_haut,vp,window)
             point_bas_projete=projection(point_bas,vp,window)
-            canevas.create_line(point_haut_projete[0],pt[0],point_haut_projete[1],pt[1])
-            canevas.create_line(point_bas_projete[0],pt[0],point_bas_projete[1],pt[1])
+            ptx=projection(pt,vp,window)
+            canevas.create_line(ptx[0],ptx[1],ptx[0],point_haut_projete[1])
+            canevas.create_line(ptx[0],ptx[1],ptx[0],point_bas_projete[1])
 
-                                
-                                
-            
+
+
+
 
 
 
