@@ -111,22 +111,23 @@ class Polygone():
     
     def scanning(self,window,vp):
         for pt in self.pts:
-            future_collisions_poly=[] #la liste des polygones qui sont au dessus/en dessous de ce point
-            future_collisions_segments=[] #la liste des segments directement au dessus/en dessous de ce point
-            up_and_down={"up":100000,"down":0} #les coordonnées en y de la droite du trapèze
-            y_min_poly, y_max_poly=min(self.enveloppe, key=lambda x: x[1])[1],max(self.enveloppe, key=lambda x: x[1])[1]
+            future_collisions_poly = [] #la liste des polygones qui sont au dessus/en dessous de ce point
+            future_collisions_segments = [] #la liste des segments directement au dessus/en dessous de ce point
+            up_and_down = {"up":100000, "down":0} #les coordonnées en y de la droite du trapèze
+            y_min_poly, y_max_poly = min(self.enveloppe, key=lambda x: x[1])[1], max(self.enveloppe, key=lambda x: x[1])[1]
             for poly in self.voisins:
-                bande_x=(poly.sb[0][0],poly.sb[1][0]) #bande_x c'est les x de superbande du voisin
-                if bande_x[0]<=pt[0]<=bande_x[1]:
+                bande_x = (poly.sb[0][0], poly.sb[1][0]) #bande_x c'est les x de superbande du voisin
+                if bande_x[0] <= pt[0] <= bande_x[1]:
                     future_collisions_poly.append(poly)
+            future_collisions_poly.append(self)
             if future_collisions_poly: #si il y a des polygones au dessus/en dessous
                 for poly in future_collisions_poly:
-                    for segpoint in range(0,len(poly.pts)-1): #on va parcourir tous les segments qui composent le polygone voisin
+                    for segpoint in range(0, len(poly.pts) - 1): #on va parcourir tous les segments qui composent le polygone voisin
                         segment=(poly.pts[segpoint], poly.pts[segpoint+1])
                         sortedseg=sorted(segment, key=lambda x: x[0]) #sortedseg c'est le segment trié selon x
-                        bande_x_seg=(sortedseg[0][0],sortedseg[1][0])#bande_x_seg c'est les x de la superbande du segment courant
-                        if bande_x_seg[0]<=pt[0]<=bande_x_seg[1]: #si le point est dans la superbande du segment
-                            if segment[0][0]!=segment[1][0]:
+                        bande_x_seg=(sortedseg[0][0], sortedseg[1][0])#bande_x_seg c'est les x de la superbande du segment courant
+                        if bande_x_seg[0] <= pt[0] <= bande_x_seg[1]: #si le point est dans la superbande du segment
+                            if segment[0][0] != segment[1][0]:
                                 pente=(segment[0][1]-segment[1][1])/(segment[0][0]-segment[1][0])#calcul de la pente
                                 delta_x=pt[0]-sortedseg[0][0] #la distance entre le plus petit x du segment et le x du point quon traite
                                 collision_y=sortedseg[0][1]+delta_x*pente #on calcule le y ou aura lieu l'intersection
@@ -135,13 +136,13 @@ class Polygone():
                                     up_and_down["down"]=max(up_and_down["down"],collision_y) #on dit que la collision en bas c'est le point le plus proche du point actuel
                                 elif delta_y<0: #cas ou le segment est en haut
                                     up_and_down["up"]=min(up_and_down["up"],collision_y) #de meme
-                                else: #si la collision se fait sur le point meme, on traite en fonction de la hauteur du 1er point, le seul cas ou ca pose probleme cest une ligne horizontale et on va l'ignorer
+                                elif poly!=self: #si la collision se fait sur le point meme, on traite en fonction de la hauteur du 1er point, le seul cas ou ca pose probleme cest une ligne horizontale et on va l'ignorer
                                     if sortedseg[0][1]<pt[y]: #si la pente est positive, le trait est a tracer en haut
                                         up_and_down["down"]=collision_y 
                                     elif sortedseg[0][1]>pt[y]: #si la pente est negative
                                         up_and_down["up"]=collision_y
                                     else:
-                                        if pt[1]==y_max_poly:
+                                        if pt[1]==y_max_poly: #le polygone est convexe, donc si la pente est nulle on sait quon est soit au dessus soit en dessous du polygone
                                             up_and_down["up"]=pt[1]
                                         else:
                                             up_and_down["down"]=pt[1]

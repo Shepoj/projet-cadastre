@@ -1,32 +1,24 @@
-import json
 import tkinter as tk
 import numpy as np
 import chainlist
 
-file = open("cadastre-83062-batiments.json","r")
-data = json.load(file)
-file.close()
+polys = [[(1,3),(2,2),(4,2),(3.5,4),(1,3)],[(6,1),(7,3),(6,4),(5,1),(6,1)],[(3,6),(6,5),(8,6),(5,7),(3,6)],[(9,4),(10,2),(12,4),(11,5),(10,5),(9,4)]]
 
-polys=[]
 
 lat=[]
 long=[]
 allpoints=[]
 
-for feature in data["features"][6060:6194]: #recuperer les points et les ajouter dans la liste de latitude, de longitude et de tous les points
-    polys.append(feature["geometry"]["coordinates"][0][0])
-    for point in feature["geometry"]["coordinates"][0][0]:
+for poly in polys:
+    for point in poly:
+        allpoints.append(point)
         lat.append(point[1])
         long.append(point[0])
 
 
 
-
-
 ymin,xmin,ymax,xmax = min(lat),min(long),max(lat),max(long)
 ratio = (xmax-xmin)/(ymax-ymin)
-
-
 
 def projection(point,wc,vp): #point : (x,y) wc : (x, y, dimx, dimy) viewport : (x,y, dimx,dimy)
     (xwc,ywc)=(-wc[0],-wc[1])
@@ -34,7 +26,7 @@ def projection(point,wc,vp): #point : (x,y) wc : (x, y, dimx, dimy) viewport : (
     (largeurviewport, hauteurviewport)=(vp[2],vp[3])
     (xvp,yvp)=vp[0:2]
     a=[(1/largeurwc)*largeurviewport , 0 , (1/largeurwc)*xwc*largeurviewport+xvp]
-    b=[0 , -(1/hauteurwc)*hauteurviewport , hauteurviewport-(1/hauteurwc)*ywc*hauteurviewport+yvp] #ca oui
+    b=[0 , -(1/hauteurwc)*hauteurviewport , hauteurviewport-(1/hauteurwc)*ywc*hauteurviewport+yvp]
     c=[0,0,1]
     visu=[a,b,c]
     point3d=[point[0],point[1],1]
@@ -52,7 +44,7 @@ class Polygone():
         self.voisins=[]
         self.sb=[]
 
-    def polygone(self, vp, window): #affichage du polygone
+    def polygone(self, vp, window):
         convertie=[projection(self.pts[0],window,vp)]
         for point in range(1,len(self.pts)):
             convertie.append(projection(self.pts[point], window, vp))
@@ -67,13 +59,13 @@ class Polygone():
         canevas.create_polygon(tk._flatten(convertie),fill='blue',outline=self.contour)
         return self.enveloppe
 
-    def cling(self): #transforme la liste des sommets en liste chainee
+    def cling(self):
         self.sommets=chainlist.DoublyLinkedList()
         for point in self.pts:
             n=chainlist.Node(point)
             self.sommets.insert_back(n)
 
-    def angledet(self,a,b,c): #verifie lobtusite dun angle
+    def angledet(self,a,b,c):
         ax,ay=a
         bx,by=b
         cx,cy=c
@@ -85,7 +77,7 @@ class Polygone():
         else:
             return True
     
-    def convexite(self): #supprime les sommets qui forment les trous concaves dans un polygone : crée l'enveloppe dans self.enveloppe
+    def convexite(self):
         nd=self.sommets.head
         while nd.next is not None:
             if nd.prev:
@@ -103,7 +95,6 @@ class Polygone():
             nd=nd.next
         self.enveloppe=self.sommets.to_list()
 
-    
     def superbande(self,allpolys, window, vp):
         self.sb=(min(self.enveloppe, key=lambda x: x[0]),max(self.enveloppe, key=lambda x: x[0]))
         bande_x=(self.sb[0][0],self.sb[1][0])
@@ -119,10 +110,10 @@ class Polygone():
         return self.voisins
     
     def scanning(self,window,vp):
-        for pt in self.enveloppe:
+        for pt in self.pts:
             future_collisions_poly = [] #la liste des polygones qui sont au dessus/en dessous de ce point
             future_collisions_segments = [] #la liste des segments directement au dessus/en dessous de ce point
-            up_and_down = {"up":1000.0, "down":0.0} #les coordonnées en y de la droite du trapèze
+            up_and_down = {"up":100000, "down":0} #les coordonnées en y de la droite du trapèze
             y_min_poly, y_max_poly = min(self.enveloppe, key=lambda x: x[1])[1], max(self.enveloppe, key=lambda x: x[1])[1]
             for poly in self.voisins:
                 bande_x = (poly.sb[0][0], poly.sb[1][0]) #bande_x c'est les x de superbande du voisin
@@ -182,8 +173,13 @@ class Polygone():
             canevas.create_line(ptx[0],ptx[1],ptx[0],point_bas_projete[1])
 
 
+
+
+
+
+
 win= tk.Tk()
-canevas=tk.Canvas(win,width=500*ratio,height=500, bg="white")
+canevas=tk.Canvas(win,width=600*ratio,height=600, bg="white")
 canevas.pack()
 
 myPolygons=[]
@@ -192,7 +188,7 @@ for poly in polys:
     pol=Polygone(len(poly),poly)
 
     allpoints+=pol.affiche_enveloppe([25,25,525*ratio,525],[xmin,ymin, xmax-xmin,ymax-ymin])
-    #pol.polygone([25,25,525*ratio,525],[xmin,ymin, xmax-xmin,ymax-ymin])
+    #pol.polygone([0,0,500*ratio,500],[xmin,ymin, xmax-xmin,ymax-ymin])
     myPolygons.append(pol)
 
 for pol in myPolygons:
@@ -200,7 +196,7 @@ for pol in myPolygons:
 
 for pol in myPolygons:
     pol.scanning([25,25,525*ratio,525],[xmin,ymin, xmax-xmin,ymax-ymin])
-    pass
 
 
-win.mainloop()  
+win.mainloop()
+
