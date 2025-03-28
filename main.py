@@ -102,6 +102,7 @@ class Polygone():
                 self.sommets.delete(b)
             nd=nd.next
         self.enveloppe=self.sommets.to_list()
+        self.enveloppe.append(self.enveloppe[0])
 
     
     def superbande(self,allpolys, window, vp):
@@ -115,6 +116,8 @@ class Polygone():
                 for point in poly.pts:
                     if bande_x[0]<=point[0]<=bande_x[1]:
                         self.voisins.append(poly)
+                        if self not in poly.voisins:
+                            poly.voisins.append(self)
                         break #peutetre faire avec un while pour eviter break
         return self.voisins
     
@@ -124,6 +127,7 @@ class Polygone():
             future_collisions_segments = [] #la liste des segments directement au dessus/en dessous de ce point
             up_and_down = {"up":1000.0, "down":0.0} #les coordonnées en y de la droite du trapèze
             y_min_poly, y_max_poly = min(self.enveloppe, key=lambda x: x[1])[1], max(self.enveloppe, key=lambda x: x[1])[1]
+            a_traiter=True
             for poly in self.voisins:
                 bande_x = (poly.sb[0][0], poly.sb[1][0]) #bande_x c'est les x de superbande du voisin
                 if bande_x[0] <= pt[0] <= bande_x[1]:
@@ -131,12 +135,14 @@ class Polygone():
             future_collisions_poly.append(self)
             if future_collisions_poly: #si il y a des polygones au dessus/en dessous
                 for poly in future_collisions_poly:
-                    for segpoint in range(0, len(poly.pts) - 1): #on va parcourir tous les segments qui composent le polygone voisin
-                        segment=(poly.pts[segpoint], poly.pts[segpoint+1])
+                    segup=[] #segup et segdown permettent de savoir si des segments d'un même polygone sont en haut et en bas du point (pour verifier si il est a linterieur dun autre poly)
+                    segdown=[]
+                    for segpoint in range(0, len(poly.enveloppe) - 1): #on va parcourir tous les segments qui composent le polygone voisin
+                        segment=(poly.enveloppe[segpoint], poly.enveloppe[segpoint+1])
                         sortedseg=sorted(segment, key=lambda x: x[0]) #sortedseg c'est le segment trié selon x
                         bande_x_seg=(sortedseg[0][0], sortedseg[1][0])#bande_x_seg c'est les x de la superbande du segment courant
                         is_colliding_with_self= poly==self and pt not in segment
-
+                        
                         if bande_x_seg[0] <= pt[0] <= bande_x_seg[1]: #si le point est dans la superbande du segment
                             if segment[0][0] != segment[1][0]:
                                 pente=(segment[0][1]-segment[1][1])/(segment[0][0]-segment[1][0])#calcul de la pente
@@ -147,43 +153,60 @@ class Polygone():
                                     up_and_down["down"]=max(up_and_down["down"],collision_y) #on dit que la collision en bas c'est le point le plus proche du point actuel
                                     if is_colliding_with_self:
                                         up_and_down["down"]=pt[1]
+                                    else:
+                                        segdown.append(segment)
                                 elif delta_y<0: #cas ou le segment est en haut
                                     up_and_down["up"]=min(up_and_down["up"],collision_y) #de meme
                                     if is_colliding_with_self:
                                         up_and_down["up"]=pt[1]
-                                elif poly!=self: #si la collision se fait sur le point meme, on traite en fonction de la hauteur du 1er point, le seul cas ou ca pose probleme cest une ligne horizontale et on va l'ignorer
+                                    else:
+                                        segup.append(segment)
+                                elif poly!=self: #si la collision se fait sur le point meme, on traite en fonction de la pente
                                     if sortedseg[0][1]<pt[1]: #si la pente est positive, le trait est a tracer en haut
                                         up_and_down["down"]=collision_y 
+                                        segdown.append(segment)
                                     elif sortedseg[0][1]>pt[1]: #si la pente est negative
                                         up_and_down["up"]=collision_y
+                                        segup.append(segment)
                                     else:
                                         if pt[1]==y_max_poly: #le polygone est convexe, donc si la pente est nulle on sait quon est soit au dessus soit en dessous du polygone
                                             up_and_down["up"]=pt[1]
+                                            segup.append(segment)
                                         else:
                                             up_and_down["down"]=pt[1]
+                                            segdown.append(segment)
                             else: #le cas ou le segment ou aura lieu la collision est vertical
                                 if pt[1]<sortedseg[0][1] and pt[1]<sortedseg[1][1]: #si le point est en dessous du segment
                                     up_and_down["up"]=min(up_and_down["up"],min(sortedseg[0][1],sortedseg[1][1]))
                                     if is_colliding_with_self:
                                         up_and_down["up"]=pt[1]
+                                    else:
+                                        segup.append(segment)
                                 elif pt[1]>sortedseg[0][1] and pt[1]>sortedseg[1][1]:
                                     up_and_down["down"]=max(up_and_down["down"],max(sortedseg[0][1],sortedseg[1][1]))
                                     if is_colliding_with_self:
                                         up_and_down["down"]=pt[1]
+                                    else:
+                                        segdown.append(segment)
                                 else: #si le point est sur le segment
                                     up_and_down["up"]=up_and_down["down"]=pt[1]
+                                    segup.append(segment)
+                                    segdown.append(segment)
+                    if segup and segdown:
+                        a_traiter=False
 
-            point_haut=(pt[0],up_and_down["up"])
-            point_bas=(pt[0],up_and_down["down"])
-            point_haut_projete=projection(point_haut,vp,window)
-            point_bas_projete=projection(point_bas,vp,window)
-            ptx=projection(pt,vp,window)
-            canevas.create_line(ptx[0],ptx[1],ptx[0],point_haut_projete[1])
-            canevas.create_line(ptx[0],ptx[1],ptx[0],point_bas_projete[1])
+            if a_traiter:
+                point_haut=(pt[0],up_and_down["up"])
+                point_bas=(pt[0],up_and_down["down"])
+                point_haut_projete=projection(point_haut,vp,window)
+                point_bas_projete=projection(point_bas,vp,window)
+                ptx=projection(pt,vp,window)
+                canevas.create_line(ptx[0],ptx[1],ptx[0],point_haut_projete[1])
+                canevas.create_line(ptx[0],ptx[1],ptx[0],point_bas_projete[1])
 
 
 win= tk.Tk()
-canevas=tk.Canvas(win,width=500*ratio,height=500, bg="white")
+canevas=tk.Canvas(win,width=600*ratio,height=600, bg="white")
 canevas.pack()
 
 myPolygons=[]
