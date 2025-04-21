@@ -1,123 +1,134 @@
 import json
 import tkinter as tk
-import numpy as np
-import chainlist
+from polygone import Polygone
+from utils import generer_points_et_chercher_plus_proche
+from pointgraph import PointGraph
+from graphe import graphe_planaire, afficher_graphe, dijkstra
 
 file = open("cadastre-83062-batiments.json","r")
 data = json.load(file)
 file.close()
 
-polys=[]
+polys = []    # liste de tous les polygones du fichier
 
-lat=[]
-long=[]
-allpoints=[]
+lat = []      # liste de toutes les latitudes
+long = []     # liste de toutes les longitudes
+allpoints = []        # liste des envoloppes
 
-for feature in data["features"][6060:6194]: #recuperer les points et les ajouter dans la liste de latitude, de longitude et de tous les points
+# recuperer les points et les ajouter dans la liste de latitude, de longitude et de tous les points
+for feature in data["features"][6060:6194]: 
     polys.append(feature["geometry"]["coordinates"][0][0])
     for point in feature["geometry"]["coordinates"][0][0]:
         lat.append(point[1])
         long.append(point[0])
 
-
-
-
-
 ymin,xmin,ymax,xmax = min(lat),min(long),max(lat),max(long)
 ratio = (xmax-xmin)/(ymax-ymin)
 
+liste_segments = []   # liste de tous les segments
 
-
-def projection(point,wc,vp): #point : (x,y) wc : (x, y, dimx, dimy) viewport : (x,y, dimx,dimy)
-    (xwc,ywc)=(-wc[0],-wc[1])
-    (largeurwc, hauteurwc)=(wc[2],wc[3])
-    (largeurviewport, hauteurviewport)=(vp[2],vp[3])
-    (xvp,yvp)=vp[0:2]
-    a=[(1/largeurwc)*largeurviewport , 0 , (1/largeurwc)*xwc*largeurviewport+xvp]
-    b=[0 , -(1/hauteurwc)*hauteurviewport , hauteurviewport-(1/hauteurwc)*ywc*hauteurviewport+yvp] #ca oui
-    c=[0,0,1]
-    visu=[a,b,c]
-    point3d=[point[0],point[1],1]
-    return [int(i) for i in np.matmul(visu,point3d)[:2]]
-
-
-class Polygone():
-    def __init__(self, N, pts, contour="black",couleur='red'):
-        self.n=N
-        self.pts=pts
-        self.contour=contour
-        self.couleur=couleur
-        self.sommets=None
-        self.enveloppe=None
-
-    def polygone(self, vp, window): #affichage du polygone
-        convertie=[projection(self.pts[0],window,vp)]
-        for point in range(1,len(self.pts)):
-            convertie.append(projection(self.pts[point], window, vp))
-        canevas.create_polygon(tk._flatten(convertie),fill=self.couleur,outline=self.contour)
-
-    def affiche_enveloppe(self, vp, window):
-        self.cling()
-        self.convexite()
-        convertie=[projection(self.pts[0],window,vp)]
-        for point in range(1,len(self.enveloppe)):
-            convertie.append(projection(self.enveloppe[point], window, vp))
-        canevas.create_polygon(tk._flatten(convertie),fill='blue',outline=self.contour)
-        return self.enveloppe
-
-    def cling(self): #transforme la liste des sommets en liste chainee
-        self.sommets=chainlist.DoublyLinkedList()
-        for point in self.pts:
-            n=chainlist.Node(point)
-            self.sommets.insert_back(n)
-
-    def angledet(self,a,b,c): #verifie lobtusite dun angle
-        ax,ay=a
-        bx,by=b
-        cx,cy=c
-        ab=(ax-bx,ay-by)
-        bc=(bx-cx,by-cy)
-        abc=ab[0]*bc[1]-ab[1]*bc[0]
-        if abc<0:
-            return False
-        else:
-            return True
-    
-    def convexite(self): #supprime les sommets qui forment les trous concaves dans un polygone : crée l'enveloppe dans self.enveloppe
-        nd=self.sommets.head
-        while nd.next is not None:
-            if nd.prev:
-                a=nd.prev.data
-            else:
-                a=self.sommets.tail.data
-            b=nd.data
-            if nd.next:
-                c=nd.next.data
-            else:
-                c=self.sommets.head.data
-            cond=self.angledet(a,b,c)
-            if not cond:
-                self.sommets.delete(b)
-            nd=nd.next
-        self.enveloppe=self.sommets.to_list()
-
-def trapeze(points, window, vp):
-    for point in points:
-        converted=projection(point, vp, window)
-        print(converted)
-        canevas.create_line(converted[0],0,converted[0],500)
 
 win= tk.Tk()
-canevas=tk.Canvas(win,width=500*ratio,height=500, bg="white")
+canevas=tk.Canvas(win, width=600*ratio, height=600, bg="white")
 canevas.pack()
-allpoints=[]
 
-for bat in polys:
-    poly=Polygone(len(bat),bat)
-    allpoints+=poly.affiche_enveloppe([0,0,500*ratio,500],[xmin,ymin, xmax-xmin,ymax-ymin])
-   
-    #poly.polygone([0,0,500*ratio,500],[xmin,ymin, xmax-xmin,ymax-ymin])
+myPolygons=[]   # liste de tous les polygones (classe Polygone)
+
+# creation des envoloppes et des polygones
+for poly in polys:
+    pol=Polygone(len(poly), poly)
+    allpoints+=pol.affiche_enveloppe([25, 25, 525*ratio, 525],[xmin, ymin, xmax-xmin, ymax-ymin], canevas)
+    myPolygons.append(pol)
+
+# creation de la superbande
+for pol in myPolygons:
+    pol.superbande(myPolygons, [25, 25, 525*ratio, 525], [xmin, ymin, xmax-xmin, ymax-ymin])
+
+# creation des segments
+for pol in myPolygons:
+    pol.scanning([25,25,525*ratio,525],[xmin,ymin, xmax-xmin,ymax-ymin], canevas, liste_segments)
+    
+# trier la liste des segments
+liste_segments.sort(key=lambda x: (x[0][0], x[1][1])) # on trie par x du point haut puis par y du point bas
+
+# suppprime les segments qui ont le meme x du point haut et bas
+for i in range(len(liste_segments) - 2, -1, -1):  # Parcours inversé
+    if liste_segments[i][0][0] == liste_segments[i][1][0] and liste_segments[i][0][1] == liste_segments[i][1][1]:
+        liste_segments.pop(i)
 
 
-#trapeze(allpoints,[0,0,500*ratio,500],[xmin,ymin, xmax-xmin,ymax-ymin])
+# creer et afficher le graphe planaire
+graphe = graphe_planaire(liste_segments, ratio)
+afficher_graphe(graphe, canevas)
+
+def relancer_dijkstra():
+    # Effacer uniquement les anciens éléments
+    canevas.delete("chemin")
+
+    # Générer deux points et trouver leurs correspondants dans le graphe
+    point_depart, point_arrivee, alea1, alea2 = generer_points_et_chercher_plus_proche(graphe, 600 * ratio, 600)
+
+    # Afficher les points aléatoires
+    canevas.create_oval(alea1[0]-4, alea1[1]-4, alea1[0]+4, alea1[1]+4, fill="orange", tags="chemin")
+    canevas.create_oval(alea2[0]-4, alea2[1]-4, alea2[0]+4, alea2[1]+4, fill="orange", tags="chemin")
+
+    # Relier aux sommets du graphe
+    canevas.create_line(alea1[0], alea1[1], point_depart.p[0], point_depart.p[1], fill="orange", dash=(4, 2), tags="chemin")
+    canevas.create_line(alea2[0], alea2[1], point_arrivee.p[0], point_arrivee.p[1], fill="orange", dash=(4, 2), tags="chemin")
+
+    # Calculer et afficher le nouveau chemin
+    chemin = dijkstra(graphe, point_depart, point_arrivee)
+    for i in range(len(chemin)-1):
+        a = chemin[i].p
+        b = chemin[i+1].p
+        canevas.create_line(a[0], a[1], b[0], b[1], fill="green", width=2, tags="chemin")
+
+segments_visibles = True
+graphe_visible = True
+chemin_visible = True
+
+# Fonction pour changer la visibilité des segments
+def changer_segments():
+    global segments_visibles
+    if segments_visibles:
+        canevas.itemconfigure("segments", state="hidden")
+        segments_visibles = False
+    else:
+        canevas.itemconfigure("segments", state="normal")
+        segments_visibles = True
+
+# Fonction pour changer la visibilité du graphe
+def changer_graphe():
+    global graphe_visible
+    if graphe_visible:
+        canevas.itemconfigure("graphe", state="hidden")
+        graphe_visible = False
+    else:
+        canevas.itemconfigure("graphe", state="normal")
+        graphe_visible = True
+
+def changer_chemin():
+    global chemin_visible
+    if chemin_visible:
+        canevas.itemconfigure("chemin", state="hidden")
+    else:
+        canevas.itemconfigure("chemin", state="normal")
+    chemin_visible = not chemin_visible
+
+
+# Bouton en bas à droite pour relancer Dijkstra avec de nouveaux points
+bouton = tk.Button(win, text="Nouveau chemin", command=relancer_dijkstra)
+bouton.place(x=600*ratio - 250, y=600 - 40)
+
+btn_chemin = tk.Button(win, text="Chemin", command=changer_chemin)
+btn_chemin.place(x=600*ratio - 122, y=600 - 40)
+
+# Bouton pour cacher/afficher les segments
+btn_segments = tk.Button(win, text="Segments", command=changer_segments)
+btn_segments.place(x=600*ratio - 130, y=600 - 80)
+
+# Bouton pour cacher/afficher le graphe
+btn_graphe = tk.Button(win, text="Graphe", command=changer_graphe)
+btn_graphe.place(x=600*ratio - 122, y=600 - 120)
+
 win.mainloop()  
