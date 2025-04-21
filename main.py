@@ -29,27 +29,8 @@ liste_segments = []   # liste de tous les segments
 
 
 win= tk.Tk()
-canevas=tk.Canvas(win,width=600*ratio,height=600, bg="white")
 canevas=tk.Canvas(win, width=600*ratio, height=600, bg="white")
 canevas.pack()
-
-myPolygons=[]
-
-for poly in polys:
-    pol=Polygone(len(poly),poly)
-
-    allpoints+=pol.affiche_enveloppe([25,25,525*ratio,525],[xmin,ymin, xmax-xmin,ymax-ymin])
-    #pol.polygone([25,25,525*ratio,525],[xmin,ymin, xmax-xmin,ymax-ymin])
-    myPolygons.append(pol)
-
-for pol in myPolygons:
-    pol.superbande(myPolygons,[25,25,525*ratio,525],[xmin,ymin, xmax-xmin,ymax-ymin])
-
-for pol in myPolygons:
-    pol.scanning([25,25,525*ratio,525],[xmin,ymin, xmax-xmin,ymax-ymin])
-    pass
-
-
 
 myPolygons=[]   # liste de tous les polygones (classe Polygone)
 
